@@ -19,21 +19,21 @@ import {
 } from "./api";
 
 function App() {
-  // Navigation Tabs
-  const [currentTab, setCurrentTab] = useState<"inbox" | "analytics" | "campaigns">("inbox");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "light";
+    const storedTheme = window.localStorage.getItem("wa-orchestrator-theme");
+    if (storedTheme === "light" || storedTheme === "dark") return storedTheme;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
 
-  // State Lists
+  const [currentTab, setCurrentTab] = useState<"inbox" | "analytics" | "campaigns">("inbox");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-
-  // Selections & Filters
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
-
-  // Status flags
   const [loadingTenants, setLoadingTenants] = useState(true);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -44,7 +44,11 @@ function App() {
   const selectedSessionId = selectedSession?.session_id ?? "";
   const isSseLive = Boolean(selectedTenantId);
 
-  // 1. Initial Load: Fetch Tenants
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    window.localStorage.setItem("wa-orchestrator-theme", theme);
+  }, [theme]);
+
   useEffect(() => {
     async function loadInitialData() {
       try {
@@ -61,10 +65,10 @@ function App() {
         setLoadingTenants(false);
       }
     }
+
     loadInitialData();
   }, []);
 
-  // 2. Fetch Sessions on Tenant/Filter Change
   useEffect(() => {
     if (!selectedTenantId) return;
 
@@ -76,11 +80,9 @@ function App() {
         setSessions(sessionList);
         setAppError("");
 
-        // Keep selection if still in list, otherwise clear
         if (selectedSessionId) {
-          const match = sessionList.find((s) => s.session_id === selectedSessionId);
-          if (match) setSelectedSession(match);
-          else setSelectedSession(null);
+          const match = sessionList.find((session) => session.session_id === selectedSessionId);
+          setSelectedSession(match ?? null);
         }
       } catch (err) {
         console.error("Failed to load sessions", err);
@@ -93,11 +95,8 @@ function App() {
     loadSessions();
   }, [selectedTenantId, selectedSessionId, statusFilter]);
 
-  // 3. Fetch Messages when Session changes
   useEffect(() => {
-    if (!selectedSessionId) {
-      return;
-    }
+    if (!selectedSessionId) return;
 
     async function loadMessages() {
       setLoadingMessages(true);
@@ -116,7 +115,6 @@ function App() {
     loadMessages();
   }, [selectedSessionId]);
 
-  // 4. Fetch Analytics on Tab change
   useEffect(() => {
     if (currentTab !== "analytics" || !selectedTenantId) return;
 
@@ -137,84 +135,77 @@ function App() {
     loadAnalytics();
   }, [currentTab, selectedTenantId]);
 
-  // 5. Subscribe to Real-Time SSE Events
   useEffect(() => {
     if (!selectedTenantId) return;
 
     const unsubscribe = subscribeToTenantEvents(selectedTenantId, (eventData) => {
-      console.log("Real-time SSE event received:", eventData);
-      
       const { event, session_id, status, message } = eventData;
 
-      // Handle message updates (inbound / outbound)
       if ((event === "inbound_message" || event === "outbound_message") && message) {
-        // Appending to messages list if currently active chat
-        if (selectedSession && selectedSession.session_id === session_id) {
+        if (selectedSession?.session_id === session_id) {
           setMessages((prev) => {
-            // Deduplicate checking message ID
-            if (prev.some((m) => m.message_id === message.message_id)) return prev;
+            if (prev.some((item) => item.message_id === message.message_id)) return prev;
             return [...prev, message];
           });
         }
 
-        // Updating local session details in sidebar list
         setSessions((prevSessions) => {
-          const exists = prevSessions.some((s) => s.session_id === session_id);
-          
+          const exists = prevSessions.some((session) => session.session_id === session_id);
+
           if (exists) {
-            return prevSessions.map((s) => {
-              if (s.session_id === session_id) {
-                return {
-                  ...s,
-                  status: status,
-                  message_count: s.message_count + 1,
-                  last_message_at: new Date().toISOString(),
-                  context_vars: {
-                    ...s.context_vars,
-                    sentiment_score: message.agent_meta?.sentiment_score ?? s.context_vars?.sentiment_score,
-                    language: message.agent_meta?.detected_language ?? s.context_vars?.language,
-                  }
-                };
-              }
-              return s;
-            }).sort((a, b) => {
-              const dateA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-              const dateB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-              return dateB - dateA;
-            });
-          } else {
-            // Prepend new session
-            const newSession: ChatSession = {
-              session_id,
-              tenant_id: selectedTenantId,
-              customer_phone: message.sender === "BOT" ? "Customer" : message.sender,
-              status: status,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              last_message_at: new Date().toISOString(),
-              message_count: 1,
-              context_vars: {
-                language: message.agent_meta?.detected_language ?? "en",
-                sentiment_score: message.agent_meta?.sentiment_score ?? 0.0,
-              },
-              flags: {
-                needs_human: status === "NEEDS_HUMAN",
-                is_frustrated: status === "NEEDS_HUMAN",
-                broadcast_eligible: true,
-              }
-            };
-            return [newSession, ...prevSessions];
+            return prevSessions
+              .map((session) => {
+                if (session.session_id === session_id) {
+                  return {
+                    ...session,
+                    status,
+                    message_count: session.message_count + 1,
+                    last_message_at: new Date().toISOString(),
+                    context_vars: {
+                      ...session.context_vars,
+                      sentiment_score: message.agent_meta?.sentiment_score ?? session.context_vars?.sentiment_score,
+                      language: message.agent_meta?.detected_language ?? session.context_vars?.language,
+                    },
+                  };
+                }
+
+                return session;
+              })
+              .sort((a, b) => {
+                const dateA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+                const dateB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+                return dateB - dateA;
+              });
           }
+
+          const newSession: ChatSession = {
+            session_id,
+            tenant_id: selectedTenantId,
+            customer_phone: message.sender === "BOT" ? "Customer" : message.sender,
+            status,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_message_at: new Date().toISOString(),
+            message_count: 1,
+            context_vars: {
+              language: message.agent_meta?.detected_language ?? "en",
+              sentiment_score: message.agent_meta?.sentiment_score ?? 0,
+            },
+            flags: {
+              needs_human: status === "NEEDS_HUMAN",
+              is_frustrated: status === "NEEDS_HUMAN",
+              broadcast_eligible: true,
+            },
+          };
+
+          return [newSession, ...prevSessions];
         });
       }
 
-      // Handle session status updates
       if (event === "session_status_changed") {
-        setSessions((prev) =>
-          prev.map((s) => (s.session_id === session_id ? { ...s, status } : s))
-        );
-        if (selectedSession && selectedSession.session_id === session_id) {
-          setSelectedSession((prev) => prev ? { ...prev, status } : null);
+        setSessions((prev) => prev.map((session) => (session.session_id === session_id ? { ...session, status } : session)));
+        if (selectedSession?.session_id === session_id) {
+          setSelectedSession((prev) => (prev ? { ...prev, status } : null));
         }
       }
     });
@@ -222,12 +213,11 @@ function App() {
     return unsubscribe;
   }, [selectedSession, selectedTenantId]);
 
-  // 6. Action Handlers
   const handleResolve = async () => {
     if (!selectedSession) return;
     try {
       await resolveSession(selectedSession.session_id);
-      setSelectedSession((prev) => prev ? { ...prev, status: "RESOLVED" } : null);
+      setSelectedSession((prev) => (prev ? { ...prev, status: "RESOLVED" } : null));
       setAppError("");
     } catch {
       setAppError("Failed to resolve the session.");
@@ -238,7 +228,7 @@ function App() {
     if (!selectedSession) return;
     try {
       await takeoverSession(selectedSession.session_id);
-      setSelectedSession((prev) => prev ? { ...prev, status: "NEEDS_HUMAN" } : null);
+      setSelectedSession((prev) => (prev ? { ...prev, status: "NEEDS_HUMAN" } : null));
       setAppError("");
     } catch {
       setAppError("Failed to take over the session.");
@@ -265,7 +255,6 @@ function App() {
       const res = await sendBroadcast(selectedTenantId, templateId, cohort);
       setAppError("");
       alert(`Broadcast sent successfully to ${res.sent_count} subscribers.`);
-      // Switch tab to check status
       setCurrentTab("inbox");
     } catch {
       setAppError("Failed to launch the campaign broadcast.");
@@ -274,7 +263,7 @@ function App() {
     }
   };
 
-  const currentTenant = tenants.find((t) => t.tenant_id === selectedTenantId) || null;
+  const currentTenant = tenants.find((tenant) => tenant.tenant_id === selectedTenantId) || null;
 
   if (loadingTenants) {
     return (
@@ -295,6 +284,8 @@ function App() {
         setCurrentTab={setCurrentTab}
         tenantName={currentTenant?.name || ""}
         isLive={isSseLive}
+        theme={theme}
+        onToggleTheme={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
       />
 
       <div className="app-shell">
@@ -349,13 +340,13 @@ function App() {
         )}
 
         {currentTab === "analytics" && (
-          <div className="tab-panel">
+          <div className="tab-panel tab-shell">
             <AnalyticsView data={analytics} loading={loadingAnalytics} />
           </div>
         )}
 
         {currentTab === "campaigns" && (
-          <div className="tab-panel">
+          <div className="tab-panel tab-shell">
             <BroadcastModal
               tenant={currentTenant}
               onSendBroadcast={handleSendBroadcast}

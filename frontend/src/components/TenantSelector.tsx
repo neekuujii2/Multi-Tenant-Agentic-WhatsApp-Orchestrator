@@ -12,63 +12,32 @@ export const TenantSelector: React.FC<TenantSelectorProps> = ({
   selectedTenantId,
   onSelectTenant,
 }) => {
+  const selectedTenant = tenants.find((tenant) => tenant.tenant_id === selectedTenantId);
+
   return (
-    <div
-      style={{
-        padding: "16px",
-        borderBottom: "1px solid var(--border-color)",
-        position: "relative",
-      }}
-    >
-      <label
-        style={{
-          display: "block",
-          fontSize: "0.7rem",
-          fontWeight: 700,
-          color: "var(--text-muted)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          marginBottom: "8px",
-        }}
-      >
-        Select Business Tenant
-      </label>
-      <div style={{ position: "relative" }}>
+    <div className="tenant-selector-shell">
+      <div className="tenant-selector-card">
+        <span className="eyebrow">Tenant Workspace</span>
+        <h3 style={{ marginTop: "8px", fontSize: "1rem" }}>
+          {selectedTenant?.name || "Select business tenant"}
+        </h3>
+        <p>Switch inbox context, analytics, and campaign actions from one place.</p>
+      </div>
+
+      <div className="tenant-selector-control">
         <select
           value={selectedTenantId}
           onChange={(e) => onSelectTenant(e.target.value)}
           className="input"
-          style={{
-            width: "100%",
-            paddingRight: "36px",
-            appearance: "none",
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: "0.85rem",
-            display: "flex",
-            alignItems: "center",
-            background: "var(--bg-tertiary)",
-            color: "var(--text-primary)",
-            height: "42px",
-          }}
+          style={{ appearance: "none", cursor: "pointer", fontWeight: 600 }}
         >
-          {tenants.map((t) => (
-            <option key={t.tenant_id} value={t.tenant_id} style={{ background: "var(--bg-secondary)" }}>
-              💼 {t.name}
+          {tenants.map((tenant) => (
+            <option key={tenant.tenant_id} value={tenant.tenant_id} style={{ background: "var(--bg-secondary)" }}>
+              {tenant.name}
             </option>
           ))}
         </select>
-        <ChevronDown
-          size={16}
-          style={{
-            position: "absolute",
-            right: "12px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            color: "var(--text-secondary)",
-            pointerEvents: "none",
-          }}
-        />
+        <ChevronDown size={16} className="tenant-selector-icon" />
       </div>
     </div>
   );

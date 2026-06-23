@@ -35,28 +35,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [replyText, setReplyText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   if (!session) {
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          color: "var(--text-muted)",
-          gap: "12px",
-        }}
-      >
-        <Bot size={48} style={{ opacity: 0.5 }} />
-        <p style={{ fontSize: "0.95rem", fontWeight: 500 }}>
-          Select a conversation from the list to start monitoring
+      <div className="chat-surface chat-empty-state">
+        <div className="chat-empty-icon">
+          <Bot size={34} color="var(--primary)" />
+        </div>
+        <h2 style={{ fontSize: "1.45rem" }}>No conversation selected</h2>
+        <p style={{ maxWidth: "460px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+          Select a conversation from the inbox to monitor customer messages, see AI activity, and jump into human takeover when needed.
         </p>
+        <span className="badge badge-responding">Inbox monitoring ready</span>
       </div>
     );
   }
@@ -65,102 +58,67 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     e.preventDefault();
     if (!replyText.trim() || sending) return;
     try {
-      // Manual replies from human keep the status as NEEDS_HUMAN, or resolve if done.
-      // We will keep status as NEEDS_HUMAN unless resolved.
       await onSendReply(replyText, "NEEDS_HUMAN");
       setReplyText("");
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
     }
   };
 
   const getStatusBadge = (status: SessionStatus) => {
     switch (status) {
       case "NEEDS_HUMAN":
-        return <span className="badge badge-needs-human">🚨 Human Takeover</span>;
+        return <span className="badge badge-needs-human">Human Takeover</span>;
       case "AGENT_RESPONDING":
-        return <span className="badge badge-responding">🤖 Bot Active</span>;
+        return <span className="badge badge-responding">Bot Active</span>;
       case "RESOLVED":
-        return <span className="badge badge-resolved">✅ Resolved</span>;
+        return <span className="badge badge-resolved">Resolved</span>;
       default:
-        return <span className="badge badge-waiting">⏳ Queued</span>;
+        return <span className="badge badge-waiting">Queued</span>;
     }
   };
 
   const formatMessageTime = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        background: "var(--bg-primary)",
-      }}
-    >
-      {/* Top Header */}
-      <div
-        className="glass-panel"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "16px 24px",
-          borderBottom: "1px solid var(--border-color)",
-        }}
-      >
+    <div className="chat-surface" style={{ display: "flex", flexDirection: "column" }}>
+      <div className="glass-panel chat-header">
         <div>
-          <h2 style={{ fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "10px" }}>
+          <h2 style={{ fontSize: "1.1rem", display: "flex", alignItems: "center", gap: "10px" }}>
             <User size={18} color="var(--primary)" />
             {session.customer_phone}
           </h2>
-          <div style={{ display: "flex", gap: "8px", marginTop: "4px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "8px", marginTop: "6px", alignItems: "center", flexWrap: "wrap" }}>
             {getStatusBadge(session.status)}
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Messages: {session.message_count}
-            </span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Messages: {session.message_count}</span>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className="chat-actions">
           {session.status !== "NEEDS_HUMAN" ? (
             <button onClick={onTakeover} className="btn btn-danger">
               <Lock size={14} />
-              Takeover (Mute Bot)
+              Takeover
             </button>
           ) : (
-            <>
-              <button onClick={onResolve} className="btn btn-success">
-                <CheckCircle size={14} />
-                Resolve (Re-enable Bot)
-              </button>
-            </>
+            <button onClick={onResolve} className="btn btn-success">
+              <CheckCircle size={14} />
+              Resolve
+            </button>
           )}
         </div>
       </div>
 
-      {/* Messages List Area */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "24px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "16px",
-          backgroundImage: "radial-gradient(var(--border-color) 1px, transparent 0)",
-          backgroundSize: "24px 24px",
-        }}
-      >
+      <div className="chat-messages">
         {loading && (
           <div className="section-banner">
             <span>Loading conversation history...</span>
           </div>
         )}
+
         {messages.map((msg, index) => {
           const isOut = msg.direction === "OUTBOUND";
           const hasMeta = msg.agent_meta && (msg.agent_meta.node || msg.agent_meta.detected_language);
@@ -185,11 +143,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   flexDirection: isOut ? "row-reverse" : "row",
                 }}
               >
-                {/* Sender Avatar */}
                 <div
                   style={{
-                    width: "28px",
-                    height: "28px",
+                    width: "30px",
+                    height: "30px",
                     borderRadius: "50%",
                     backgroundColor: isOut ? "var(--primary-glow)" : "var(--bg-tertiary)",
                     border: "1px solid var(--border-color)",
@@ -199,29 +156,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     flexShrink: 0,
                   }}
                 >
-                  {isOut ? (
-                    <Bot size={14} color="var(--primary)" />
-                  ) : (
-                    <User size={14} color="var(--text-secondary)" />
-                  )}
+                  {isOut ? <Bot size={14} color="var(--primary)" /> : <User size={14} color="var(--text-secondary)" />}
                 </div>
 
-                {/* Message Bubble Container */}
                 <div>
                   <div
                     className="glass-panel"
                     style={{
                       padding: "12px 16px",
-                      borderRadius: isOut ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                      borderRadius: isOut ? "18px 18px 6px 18px" : "18px 18px 18px 6px",
                       background: isOut
                         ? "linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)"
                         : "var(--bg-secondary)",
                       border: isOut ? "none" : "1px solid var(--border-color)",
-                      color: isOut ? "#fff" : "var(--text-primary)",
+                      color: isOut ? "var(--primary-foreground)" : "var(--text-primary)",
                       boxShadow: isOut ? "0 4px 14px var(--primary-glow)" : "none",
                     }}
                   >
-                    {/* Media Render */}
                     {msg.content.media_url && (
                       <div style={{ marginBottom: "8px", borderRadius: "8px", overflow: "hidden" }}>
                         {msg.content.type === "image" ? (
@@ -247,8 +198,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                               alignItems: "center",
                               gap: "8px",
                               padding: "10px",
-                              background: "rgba(0,0,0,0.15)",
-                              color: isOut ? "#fff" : "var(--primary)",
+                              background: "rgba(0,0,0,0.08)",
+                              color: isOut ? "var(--primary-foreground)" : "var(--primary)",
                               textDecoration: "none",
                               borderRadius: "6px",
                               fontSize: "0.8rem",
@@ -264,15 +215,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </div>
                     )}
 
-                    {/* Text content */}
                     {msg.content.text && (
-                      <p style={{ fontSize: "0.9rem", lineHeight: "1.45", whiteSpace: "pre-wrap" }}>
-                        {msg.content.text}
-                      </p>
+                      <p style={{ fontSize: "0.9rem", lineHeight: "1.45", whiteSpace: "pre-wrap" }}>{msg.content.text}</p>
                     )}
                   </div>
 
-                  {/* Message Info / Time */}
                   <div
                     style={{
                       display: "flex",
@@ -296,7 +243,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </div>
               </div>
 
-              {/* Bot Agent Processing Observability Stats (rendered directly below bubble) */}
               {hasMeta && (
                 <div
                   style={{
@@ -306,10 +252,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     margin: "4px 36px",
                     fontSize: "0.7rem",
                     color: "var(--text-muted)",
-                    background: "rgba(255, 255, 255, 0.02)",
-                    padding: "4px 10px",
-                    borderRadius: "6px",
+                    background: "color-mix(in srgb, var(--card) 86%, var(--muted) 14%)",
+                    padding: "6px 10px",
+                    borderRadius: "10px",
                     border: "1px solid var(--border-color)",
+                    flexWrap: "wrap",
                   }}
                 >
                   <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -329,8 +276,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           msg.agent_meta.sentiment_score < -0.4
                             ? "var(--danger)"
                             : msg.agent_meta.sentiment_score > 0.4
-                            ? "var(--success)"
-                            : "var(--warning)",
+                              ? "var(--success)"
+                              : "var(--warning)",
                       }}
                     >
                       Sentiment: <b>{msg.agent_meta.sentiment_score.toFixed(2)}</b>
@@ -344,24 +291,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input / Control Footer Bar */}
-      <div
-        className="glass-panel"
-        style={{
-          padding: "20px 24px",
-          borderTop: "1px solid var(--border-color)",
-        }}
-      >
+      <div className="glass-panel chat-footer">
         {session.status !== "NEEDS_HUMAN" ? (
           <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              background: "rgba(139, 92, 246, 0.04)",
+              background: "color-mix(in srgb, var(--secondary) 35%, var(--card) 65%)",
               border: "1px solid var(--primary-glow)",
-              borderRadius: "8px",
+              borderRadius: "16px",
               padding: "12px 18px",
+              gap: "12px",
+              flexWrap: "wrap",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -370,30 +312,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 AI agent is currently managing replies for this customer.
               </span>
             </div>
-            <button
-              onClick={onTakeover}
-              className="btn btn-primary"
-              style={{ padding: "6px 12px", fontSize: "0.75rem" }}
-            >
+            <button onClick={onTakeover} className="btn btn-primary" style={{ padding: "8px 12px", fontSize: "0.82rem" }}>
               <Lock size={12} />
               Takeover Chat
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSend} style={{ display: "flex", gap: "12px" }}>
+          <form onSubmit={handleSend} style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
             <input
               type="text"
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               placeholder="Type your response in English, Hindi, or Hinglish..."
               className="input"
-              style={{ flex: 1, height: "46px" }}
+              style={{ flex: 1 }}
               disabled={sending}
             />
             <button
               type="submit"
               className="btn btn-primary"
-              style={{ width: "46px", height: "46px", padding: 0 }}
+              style={{ width: "52px", minHeight: "46px", padding: 0 }}
               disabled={!replyText.trim() || sending}
             >
               <Send size={16} />
